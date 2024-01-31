@@ -7,13 +7,9 @@
 
 #define BUFFER_SIZE 1024
 
-int main(int argc, char *argv[]) {
-    if (argc != 2) {
-        printf("Usage: %s <port>\n", argv[0]);
-        return 1;
-    }
+int main(char *argv[]) {
 
-    int port = atoi(argv[1]);
+    int port = 8080;
 
     int server_fd, new_socket;
     struct sockaddr_in address;
