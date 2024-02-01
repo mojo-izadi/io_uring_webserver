@@ -79,19 +79,29 @@ int main(char *argv[]) {
         io_uring_wait_cqe(&ring, &cqe);
         io_uring_cqe_seen(&ring, cqe);
 
-        printf("Requested file: %s\n", buffer);
+        char temp_buffer[BUFFER_SIZE];
+        strcpy(temp_buffer, buffer);
+        char* file_name = strtok(temp_buffer, " ");
+        file_name = strtok(NULL, " ");
+        
+
+        printf("Requested file: file_name: %s\n buffer: %s\n", file_name, buffer);
 
         // Open the file
-        FILE *file = fopen(buffer, "r");
+        FILE *file = fopen(file_name, "r");
         if (file == NULL) {
             // File not found
+            printf("file not found\n");
             write(new_socket, "NOT FOUND", 9);
         } else {
+            char buffer_send[BUFFER_SIZE];
             // Read the file contents and write to the socket
+            printf("file found\n");
             while (!feof(file)) {
-                size_t bytesRead = fread(buffer, 1, BUFFER_SIZE, file);
+                size_t bytesRead = fread(buffer_send, 1, BUFFER_SIZE, file);
                 if (bytesRead > 0) {
-                    write(new_socket, buffer, bytesRead);
+                    write(new_socket, buffer_send, bytesRead);
+                    printf("%s\n", buffer_send);
                 }
             }
             fclose(file);
