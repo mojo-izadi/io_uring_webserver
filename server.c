@@ -73,6 +73,7 @@ int main(char *argv[]) {
 
         sqe = io_uring_get_sqe(&ring);
         io_uring_prep_readv(sqe, new_socket, &iov, 1, 0);
+        io_uring_sqe_set_data(sqe, (void *)new_socket);
         io_uring_submit(&ring);
 
         // Wait for the read operation to complete
@@ -83,7 +84,6 @@ int main(char *argv[]) {
         strcpy(temp_buffer, buffer);
         char* file_name = strtok(temp_buffer, " ");
         file_name = strtok(NULL, " ");
-        
 
         printf("Requested file: file_name: %s\n buffer: %s\n", file_name, buffer);
 
@@ -92,16 +92,45 @@ int main(char *argv[]) {
         if (file == NULL) {
             // File not found
             printf("file not found\n");
-            write(new_socket, "NOT FOUND", 9);
+
+            // Send HTTP/1.1 404 Not Found response
+            char response[] = "HTTP/1.1 404 Not Found\r\n"
+                              "Content-Length: 9\r\n"
+                              "Content-Type: text/plain\r\n\r\n"
+                              "NOT FOUND";
+            write(new_socket, response, strlen(response));
         } else {
             char buffer_send[BUFFER_SIZE];
             // Read the file contents and write to the socket
             printf("file found\n");
+            fseek(file, 0L, SEEK_END);
+            int file_size = ftell(file);
+            rewind(file);
+
+            struct io_uring_sqe *write_sqe;
+            struct io_uring_cqe *write_cqe;
+            struct iovec write_iov;
+            write_iov.iov_base = buffer_send;
+            write_iov.iov_len = BUFFER_SIZE;
+
+            // Send HTTP/1.1 200 OK response
+            char response_header[256];
+            snprintf(response_header, sizeof(response_header), "HTTP/1.1 200 OK\r\n"
+                                                                "Content-Length: %d\r\n"
+                                                                "Content-Type: text/plain\r\n\r\n",
+                     file_size);
+            write(new_socket, response_header, strlen(response_header));
             while (!feof(file)) {
                 size_t bytesRead = fread(buffer_send, 1, BUFFER_SIZE, file);
                 if (bytesRead > 0) {
-                    write(new_socket, buffer_send, bytesRead);
-                    printf("%s\n", buffer_send);
+                    write_sqe = io_uring_get_sqe(&ring);
+                    io_uring_prep_writev(write_sqe, new_socket, &write_iov, 1, 0);
+                    io_uring_sqe_set_data(write_sqe, (void *)new_socket);
+                    io_uring_submit(&ring);
+
+                    // Wait for the write operation to complete
+                    io_uring_wait_cqe(&ring, &write_cqe);
+                    io_uring_cqe_seen(&ring, write_cqe);
                 }
             }
             fclose(file);
